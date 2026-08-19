@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/auth';
-import { getSupabase } from '@/lib/supabase';
-
-export const runtime = 'edge';
+import { query } from '@/lib/db';
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSessionFromRequest(req);
@@ -10,14 +8,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { id } = await params;
   const { name, targetCount, unit, period, deadline } = await req.json();
-  const supabase = getSupabase();
-  const { data: goals } = await supabase.from('goals').select('id').eq('user_id', session.userId);
-  const goalIds = goals?.map(g => g.id) ?? [];
-  await supabase
-    .from('actions')
-    .update({ name, target_count: targetCount, unit, period: period ?? '全期間', deadline: deadline ?? null })
-    .eq('id', id)
-    .in('goal_id', goalIds);
+  await query(
+    `UPDATE actions SET name=$1, target_count=$2, unit=$3, period=$4, deadline=$5
+     WHERE id=$6 AND goal_id IN (SELECT id FROM goals WHERE user_id=$7)`,
+    [name, targetCount, unit, period ?? '全期間', deadline ?? null, id, session.userId]
+  );
   return NextResponse.json({ ok: true });
 }
 
@@ -26,9 +21,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
-  const supabase = getSupabase();
-  const { data: goals } = await supabase.from('goals').select('id').eq('user_id', session.userId);
-  const goalIds = goals?.map(g => g.id) ?? [];
-  await supabase.from('actions').delete().eq('id', id).in('goal_id', goalIds);
+  await query(
+    'DELETE FROM actions WHERE id=$1 AND goal_id IN (SELECT id FROM goals WHERE user_id=$2)',
+    [id, session.userId]
+  );
   return NextResponse.json({ ok: true });
 }

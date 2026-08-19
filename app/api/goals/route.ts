@@ -1,21 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/auth';
-import { getSupabase } from '@/lib/supabase';
-
-export const runtime = 'edge';
+import { query, queryOne } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from('goals')
-    .select('id, name, description, deadline')
-    .eq('user_id', session.userId)
-    .order('created_at');
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data ?? []);
+  const goals = await query(
+    'SELECT id, name, description, deadline FROM goals WHERE user_id = $1 ORDER BY created_at ASC',
+    [session.userId]
+  );
+  return NextResponse.json(goals);
 }
 
 export async function POST(req: NextRequest) {
@@ -23,12 +18,9 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { name, description, deadline } = await req.json();
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from('goals')
-    .insert({ user_id: session.userId, name, description: description ?? '', deadline: deadline ?? null })
-    .select('id, name, description, deadline')
-    .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data, { status: 201 });
+  const goal = await queryOne(
+    'INSERT INTO goals (user_id, name, description, deadline) VALUES ($1, $2, $3, $4) RETURNING id, name, description, deadline',
+    [session.userId, name, description ?? '', deadline ?? null]
+  );
+  return NextResponse.json(goal, { status: 201 });
 }
