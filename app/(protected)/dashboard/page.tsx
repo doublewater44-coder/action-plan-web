@@ -60,8 +60,25 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-gray-400 text-sm">読み込み中...</div>
+      <div className="animate-pulse">
+        {/* タブナビ skeleton */}
+        <div className="flex border-b border-gray-200 mb-4 -mx-4 px-4 bg-white sticky top-[53px] z-10 gap-2">
+          {['w-24', 'w-16', 'w-24', 'w-28'].map((w, i) => (
+            <div key={i} className={`${w} h-10 my-1.5 rounded bg-gray-200`} />
+          ))}
+        </div>
+        {/* 定性ゴール */}
+        <div className="rounded-xl bg-gray-100 h-16 mb-4" />
+        {/* アクションカード × 3 */}
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="rounded-xl border border-gray-200 p-4 mb-3">
+            <div className="h-4 bg-gray-200 rounded w-1/2 mb-3" />
+            <div className="h-3 bg-gray-100 rounded w-full mb-2" />
+            <div className="h-2 bg-gray-200 rounded-full w-full" />
+          </div>
+        ))}
+        {/* グラフ */}
+        <div className="rounded-xl bg-gray-100 h-48 mt-2" />
       </div>
     );
   }
