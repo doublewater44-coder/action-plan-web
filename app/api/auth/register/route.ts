@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { getSupabase } from '@/lib/supabase';
+import { query } from '@/lib/db';
 
 export async function POST(req: NextRequest) {
   const { username, displayName, password } = await req.json();
@@ -12,19 +12,17 @@ export async function POST(req: NextRequest) {
   }
 
   const hash = bcrypt.hashSync(password, 10);
-  const supabase = getSupabase();
-  const { error } = await supabase.from('users').insert({
-    username: username.trim().toLowerCase(),
-    display_name: displayName.trim(),
-    password_hash: hash,
-  });
-
-  if (error) {
-    if (error.code === '23505') {
+  try {
+    await query(
+      'INSERT INTO users (username, display_name, password_hash) VALUES ($1, $2, $3)',
+      [username.trim().toLowerCase(), displayName.trim(), hash]
+    );
+    return NextResponse.json({ ok: true });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : '';
+    if (msg.includes('unique') || msg.includes('duplicate')) {
       return NextResponse.json({ error: 'そのユーザー名は既に使われています' }, { status: 409 });
     }
     return NextResponse.json({ error: '登録に失敗しました' }, { status: 500 });
   }
-
-  return NextResponse.json({ ok: true });
 }

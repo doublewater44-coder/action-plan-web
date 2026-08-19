@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/auth';
-import { getSupabase } from '@/lib/supabase';
-
-export const runtime = 'edge';
+import { query, transaction } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -11,22 +9,14 @@ export async function GET(req: NextRequest) {
   const date = req.nextUrl.searchParams.get('date');
   if (!date) return NextResponse.json({ error: 'date required' }, { status: 400 });
 
-  const supabase = getSupabase();
-  const { data: goals } = await supabase.from('goals').select('id').eq('user_id', session.userId);
-  const goalIds = goals?.map(g => g.id) ?? [];
-  if (goalIds.length === 0) return NextResponse.json([]);
-
-  const { data: actions } = await supabase.from('actions').select('id').in('goal_id', goalIds);
-  const actionIds = actions?.map(a => a.id) ?? [];
-  if (actionIds.length === 0) return NextResponse.json([]);
-
-  const { data } = await supabase
-    .from('daily_progress')
-    .select('*')
-    .in('action_id', actionIds)
-    .eq('progress_date', date);
-
-  return NextResponse.json(data ?? []);
+  const rows = await query(
+    `SELECT dp.* FROM daily_progress dp
+     JOIN actions a ON dp.action_id = a.id
+     JOIN goals g ON a.goal_id = g.id
+     WHERE g.user_id = $1 AND dp.progress_date = $2`,
+    [session.userId, date]
+  );
+  return NextResponse.json(rows);
 }
 
 export async function POST(req: NextRequest) {
@@ -34,17 +24,29 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const records: { actionId: number; date: string; count: number; note: string }[] = await req.json();
-  const supabase = getSupabase();
 
-  await supabase.from('daily_progress').upsert(
-    records.map(r => ({
-      action_id: r.actionId,
-      progress_date: r.date,
-      count: r.count,
-      note: r.note ?? '',
-    })),
-    { onConflict: 'action_id,progress_date' }
-  );
+  await transaction(async (client) => {
+    for (const r of records) {
+      await client.query(
+        `INSERT INTO daily_progress (action_id, progress_date, count, note)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (action_id, progress_date) DO UPDATE SET count=$3, note=$4`,
+        [r.actionId, r.date, r.count, r.note ?? '']
+      );
+    }
+  });
 
   return NextResponse.json({ ok: true });
+}
+
+export async function GET_by_action(req: NextRequest) {
+  const session = await getSessionFromRequest(req);
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const actionId = req.nextUrl.searchParams.get('actionId');
+  const rows = await query(
+    'SELECT * FROM daily_progress WHERE action_id=$1 ORDER BY progress_date ASC',
+    [actionId]
+  );
+  return NextResponse.json(rows);
 }

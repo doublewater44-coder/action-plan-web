@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/auth';
-import { getSupabase } from '@/lib/supabase';
-
-export const runtime = 'edge';
+import { query } from '@/lib/db';
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSessionFromRequest(req);
@@ -10,12 +8,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { id } = await params;
   const { name, description, deadline } = await req.json();
-  const supabase = getSupabase();
-  await supabase
-    .from('goals')
-    .update({ name, description: description ?? '', deadline: deadline ?? null })
-    .eq('id', id)
-    .eq('user_id', session.userId);
+  await query(
+    'UPDATE goals SET name=$1, description=$2, deadline=$3 WHERE id=$4 AND user_id=$5',
+    [name, description ?? '', deadline ?? null, id, session.userId]
+  );
   return NextResponse.json({ ok: true });
 }
 
@@ -24,7 +20,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
-  const supabase = getSupabase();
-  await supabase.from('goals').delete().eq('id', id).eq('user_id', session.userId);
+  await query('DELETE FROM goals WHERE id=$1 AND user_id=$2', [id, session.userId]);
   return NextResponse.json({ ok: true });
 }
