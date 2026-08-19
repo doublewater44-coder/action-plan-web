@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
     "@types/bcryptjs": "^2.4.6",
     "@types/pg": "^8.23.1",
     "@types/recharts": "^1.8.29",
