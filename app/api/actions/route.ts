@@ -9,10 +9,11 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const supabase = getSupabase();
-  const { data: goals } = await supabase
+  const { data: goals, error: ge } = await supabase
     .from('goals')
     .select('id, name')
     .eq('user_id', session.userId);
+  if (ge) return NextResponse.json({ error: ge.message }, { status: 500 });
 
   const goalIds = goals?.map(g => g.id) ?? [];
   if (goalIds.length === 0) return NextResponse.json([]);
@@ -21,12 +22,13 @@ export async function GET(req: NextRequest) {
     (goals ?? []).map(g => [g.id, g.name])
   );
 
-  const { data: actions } = await supabase
+  const { data: actions, error: ae } = await supabase
     .from('actions')
     .select('id, goal_id, name, target_count, unit, period, deadline')
     .in('goal_id', goalIds)
     .order('goal_id')
     .order('created_at');
+  if (ae) return NextResponse.json({ error: ae.message }, { status: 500 });
 
   return NextResponse.json(
     (actions ?? []).map(a => ({ ...a, goal_name: goalNameMap[a.goal_id] }))
@@ -39,10 +41,11 @@ export async function POST(req: NextRequest) {
 
   const { goalId, name, targetCount, unit, period, deadline } = await req.json();
   const supabase = getSupabase();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('actions')
     .insert({ goal_id: goalId, name, target_count: targetCount, unit, period: period ?? '全期間', deadline: deadline ?? null })
     .select('id, goal_id, name, target_count, unit, period, deadline')
     .single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data, { status: 201 });
 }

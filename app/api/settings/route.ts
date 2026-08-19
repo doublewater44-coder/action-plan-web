@@ -10,12 +10,13 @@ export async function GET(req: NextRequest) {
 
   const key = req.nextUrl.searchParams.get('key') ?? 'qualitative_goal';
   const supabase = getSupabase();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('settings')
     .select('value')
     .eq('user_id', session.userId)
     .eq('setting_key', key)
-    .single();
+    .maybeSingle();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ value: data?.value ?? '' });
 }
 
@@ -25,8 +26,9 @@ export async function PUT(req: NextRequest) {
 
   const { key, value } = await req.json();
   const supabase = getSupabase();
-  await supabase
+  const { error } = await supabase
     .from('settings')
     .upsert({ user_id: session.userId, setting_key: key, value }, { onConflict: 'user_id,setting_key' });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

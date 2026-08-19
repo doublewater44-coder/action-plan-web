@@ -17,24 +17,29 @@ export async function GET(req: NextRequest) {
 
   const supabase = getSupabase();
 
-  const { data: goals } = await supabase.from('goals').select('id').eq('user_id', session.userId);
+  const { data: goals, error: ge } = await supabase.from('goals').select('id').eq('user_id', session.userId);
+  if (ge) return NextResponse.json({ error: ge.message }, { status: 500 });
+
   const goalIds = goals?.map(g => g.id) ?? [];
   if (goalIds.length === 0) {
     return NextResponse.json({ totals: {}, weekTotals: {}, today: {}, chart: [] });
   }
 
-  const { data: actions } = await supabase.from('actions').select('id').in('goal_id', goalIds);
+  const { data: actions, error: ae } = await supabase.from('actions').select('id').in('goal_id', goalIds);
+  if (ae) return NextResponse.json({ error: ae.message }, { status: 500 });
+
   const actionIds = actions?.map(a => a.id) ?? [];
   if (actionIds.length === 0) {
     return NextResponse.json({ totals: {}, weekTotals: {}, today: {}, chart: [] });
   }
 
-  const { data: progress } = await supabase
+  const { data: progress, error: pe } = await supabase
     .from('daily_progress')
     .select('action_id, progress_date, count, note')
     .in('action_id', actionIds)
     .order('action_id')
     .order('progress_date');
+  if (pe) return NextResponse.json({ error: pe.message }, { status: 500 });
 
   const totals: Record<number, number> = {};
   const weekTotals: Record<number, number> = {};
