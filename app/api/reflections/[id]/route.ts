@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/auth';
-import { query } from '@/lib/db';
+import { getSupabase } from '@/lib/supabase';
+
+export const runtime = 'edge';
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSessionFromRequest(req);
@@ -8,11 +10,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { id } = await params;
   const { goodPoints, badPoints, nextGoal, score } = await req.json();
-  await query(
-    `UPDATE weekly_reflections SET good_points=$1, bad_points=$2, next_goal=$3, score=$4
-     WHERE id=$5 AND goal_id IN (SELECT id FROM goals WHERE user_id=$6)`,
-    [goodPoints, badPoints, nextGoal, score, id, session.userId]
-  );
+  const supabase = getSupabase();
+  const { data: goals } = await supabase.from('goals').select('id').eq('user_id', session.userId);
+  const goalIds = goals?.map(g => g.id) ?? [];
+  await supabase
+    .from('weekly_reflections')
+    .update({ good_points: goodPoints, bad_points: badPoints, next_goal: nextGoal, score })
+    .eq('id', id)
+    .in('goal_id', goalIds);
   return NextResponse.json({ ok: true });
 }
 
@@ -21,9 +26,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
-  await query(
-    'DELETE FROM weekly_reflections WHERE id=$1 AND goal_id IN (SELECT id FROM goals WHERE user_id=$2)',
-    [id, session.userId]
-  );
+  const supabase = getSupabase();
+  const { data: goals } = await supabase.from('goals').select('id').eq('user_id', session.userId);
+  const goalIds = goals?.map(g => g.id) ?? [];
+  await supabase.from('weekly_reflections').delete().eq('id', id).in('goal_id', goalIds);
   return NextResponse.json({ ok: true });
 }

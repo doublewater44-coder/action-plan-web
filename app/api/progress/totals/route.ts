@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/auth';
-import { query } from '@/lib/db';
+import { getSupabase } from '@/lib/supabase';
+
+export const runtime = 'edge';
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -13,37 +15,46 @@ export async function GET(req: NextRequest) {
   monday.setDate(monday.getDate() + mondayOffset);
   const weekStart = monday.toISOString().split('T')[0];
 
-  const [totals, weekTotals, todayRows, chartRows] = await Promise.all([
-    query<{ action_id: number; total: string }>(
-      `SELECT dp.action_id, COALESCE(SUM(dp.count),0) AS total
-       FROM daily_progress dp JOIN actions a ON dp.action_id=a.id JOIN goals g ON a.goal_id=g.id
-       WHERE g.user_id=$1 GROUP BY dp.action_id`,
-      [session.userId]
-    ),
-    query<{ action_id: number; total: string }>(
-      `SELECT dp.action_id, COALESCE(SUM(dp.count),0) AS total
-       FROM daily_progress dp JOIN actions a ON dp.action_id=a.id JOIN goals g ON a.goal_id=g.id
-       WHERE g.user_id=$1 AND dp.progress_date >= $2 GROUP BY dp.action_id`,
-      [session.userId, weekStart]
-    ),
-    query<{ action_id: number; count: number; note: string; progress_date: string }>(
-      `SELECT dp.action_id, dp.count, dp.note, dp.progress_date
-       FROM daily_progress dp JOIN actions a ON dp.action_id=a.id JOIN goals g ON a.goal_id=g.id
-       WHERE g.user_id=$1 AND dp.progress_date=$2`,
-      [session.userId, today]
-    ),
-    query<{ action_id: number; progress_date: string; count: number; note: string }>(
-      `SELECT dp.action_id, dp.progress_date, dp.count, dp.note
-       FROM daily_progress dp JOIN actions a ON dp.action_id=a.id JOIN goals g ON a.goal_id=g.id
-       WHERE g.user_id=$1 ORDER BY dp.action_id, dp.progress_date ASC`,
-      [session.userId]
-    ),
-  ]);
+  const supabase = getSupabase();
 
-  return NextResponse.json({
-    totals: Object.fromEntries(totals.map((r) => [r.action_id, parseFloat(r.total)])),
-    weekTotals: Object.fromEntries(weekTotals.map((r) => [r.action_id, parseFloat(r.total)])),
-    today: Object.fromEntries(todayRows.map((r) => [r.action_id, r])),
-    chart: chartRows,
-  });
+  const { data: goals, error: ge } = await supabase.from('goals').select('id').eq('user_id', session.userId);
+  if (ge) return NextResponse.json({ error: ge.message }, { status: 500 });
+
+  const goalIds = goals?.map(g => g.id) ?? [];
+  if (goalIds.length === 0) {
+    return NextResponse.json({ totals: {}, weekTotals: {}, today: {}, chart: [] });
+  }
+
+  const { data: actions, error: ae } = await supabase.from('actions').select('id').in('goal_id', goalIds);
+  if (ae) return NextResponse.json({ error: ae.message }, { status: 500 });
+
+  const actionIds = actions?.map(a => a.id) ?? [];
+  if (actionIds.length === 0) {
+    return NextResponse.json({ totals: {}, weekTotals: {}, today: {}, chart: [] });
+  }
+
+  const { data: progress, error: pe } = await supabase
+    .from('daily_progress')
+    .select('action_id, progress_date, count, note')
+    .in('action_id', actionIds)
+    .order('action_id')
+    .order('progress_date');
+  if (pe) return NextResponse.json({ error: pe.message }, { status: 500 });
+
+  const totals: Record<number, number> = {};
+  const weekTotals: Record<number, number> = {};
+  const todayMap: Record<number, { action_id: number; count: number; note: string; progress_date: string }> = {};
+
+  for (const row of progress ?? []) {
+    const c = Number(row.count);
+    totals[row.action_id] = (totals[row.action_id] ?? 0) + c;
+    if (row.progress_date >= weekStart) {
+      weekTotals[row.action_id] = (weekTotals[row.action_id] ?? 0) + c;
+    }
+    if (row.progress_date === today) {
+      todayMap[row.action_id] = row;
+    }
+  }
+
+  return NextResponse.json({ totals, weekTotals, today: todayMap, chart: progress ?? [] });
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { queryOne } from '@/lib/db';
+import { getSupabase } from '@/lib/supabase';
 import { signToken, cookieOptions, COOKIE_NAME } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
@@ -9,10 +9,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '入力してください' }, { status: 400 });
   }
 
-  const user = await queryOne<{ id: number; display_name: string; password_hash: string }>(
-    'SELECT id, display_name, password_hash FROM users WHERE username = $1',
-    [username.trim().toLowerCase()]
-  );
+  const supabase = getSupabase();
+  const { data: user } = await supabase
+    .from('users')
+    .select('id, display_name, password_hash')
+    .eq('username', username.trim().toLowerCase())
+    .single();
 
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
     return NextResponse.json({ error: 'ユーザー名またはパスワードが違います' }, { status: 401 });

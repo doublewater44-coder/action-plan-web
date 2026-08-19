@@ -1,18 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/auth';
-import { query, queryOne } from '@/lib/db';
+import { getSupabase } from '@/lib/supabase';
+
+export const runtime = 'edge';
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const actions = await query(
-    `SELECT a.id, a.goal_id, a.name, a.target_count, a.unit, a.period, a.deadline, g.name AS goal_name
-     FROM actions a JOIN goals g ON a.goal_id = g.id
-     WHERE g.user_id = $1 ORDER BY a.goal_id, a.created_at ASC`,
-    [session.userId]
+  const supabase = getSupabase();
+  const { data: goals, error: ge } = await supabase
+    .from('goals')
+    .select('id, name')
+    .eq('user_id', session.userId);
+  if (ge) return NextResponse.json({ error: ge.message }, { status: 500 });
+
+  const goalIds = goals?.map(g => g.id) ?? [];
+  if (goalIds.length === 0) return NextResponse.json([]);
+
+  const goalNameMap: Record<number, string> = Object.fromEntries(
+    (goals ?? []).map(g => [g.id, g.name])
   );
-  return NextResponse.json(actions);
+
+  const { data: actions, error: ae } = await supabase
+    .from('actions')
+    .select('id, goal_id, name, target_count, unit, period, deadline')
+    .in('goal_id', goalIds)
+    .order('goal_id')
+    .order('created_at');
+  if (ae) return NextResponse.json({ error: ae.message }, { status: 500 });
+
+  return NextResponse.json(
+    (actions ?? []).map(a => ({ ...a, goal_name: goalNameMap[a.goal_id] }))
+  );
 }
 
 export async function POST(req: NextRequest) {
@@ -20,10 +40,12 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { goalId, name, targetCount, unit, period, deadline } = await req.json();
-  const action = await queryOne(
-    `INSERT INTO actions (goal_id, name, target_count, unit, period, deadline)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, goal_id, name, target_count, unit, period, deadline`,
-    [goalId, name, targetCount, unit, period ?? '全期間', deadline ?? null]
-  );
-  return NextResponse.json(action, { status: 201 });
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('actions')
+    .insert({ goal_id: goalId, name, target_count: targetCount, unit, period: period ?? '全期間', deadline: deadline ?? null })
+    .select('id, goal_id, name, target_count, unit, period, deadline')
+    .single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json(data, { status: 201 });
 }
