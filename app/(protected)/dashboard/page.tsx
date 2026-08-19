@@ -31,29 +31,43 @@ export default function DashboardPage() {
   const [qualitative, setQualitative] = useState('');
   const [quote, setQuote] = useState<{ text: string; author: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const fetchAll = useCallback(async () => {
-    const [gRes, aRes, tRes, sRes] = await Promise.all([
-      fetch('/api/goals'),
-      fetch('/api/actions'),
-      fetch('/api/progress/totals'),
-      fetch('/api/settings?key=qualitative_goal'),
-    ]);
-    const [g, a, t, s] = await Promise.all([gRes.json(), aRes.json(), tRes.json(), sRes.json()]);
-    setGoals(Array.isArray(g) ? g : []);
-    setActions(Array.isArray(a) ? a : []);
-    setTotals(t ?? { totals: {}, weekTotals: {}, today: {}, chart: [] });
-    setQualitative(s?.value ?? '');
+    try {
+      const [gRes, aRes, tRes, sRes] = await Promise.all([
+        fetch('/api/goals'),
+        fetch('/api/actions'),
+        fetch('/api/progress/totals'),
+        fetch('/api/settings?key=qualitative_goal'),
+      ]);
 
-    // 全ゴールの振り返りを一括取得
-    const goalList: Goal[] = Array.isArray(g) ? g : [];
-    if (goalList.length > 0) {
-      const rResults = await Promise.all(goalList.map((gl) => fetch(`/api/reflections?goalId=${gl.id}`).then((r) => r.json())));
-      setReflections(rResults.flat());
-    } else {
-      setReflections([]);
+      if (!gRes.ok || !aRes.ok || !tRes.ok || !sRes.ok) {
+        const errBody = !gRes.ok ? await gRes.text() : !aRes.ok ? await aRes.text() : !tRes.ok ? await tRes.text() : await sRes.text();
+        setFetchError(`API エラー: ${errBody.slice(0, 200)}`);
+        setLoading(false);
+        return;
+      }
+
+      const [g, a, t, s] = await Promise.all([gRes.json(), aRes.json(), tRes.json(), sRes.json()]);
+      setGoals(Array.isArray(g) ? g : []);
+      setActions(Array.isArray(a) ? a : []);
+      setTotals(t ?? { totals: {}, weekTotals: {}, today: {}, chart: [] });
+      setQualitative(s?.value ?? '');
+
+      const goalList: Goal[] = Array.isArray(g) ? g : [];
+      if (goalList.length > 0) {
+        const rResults = await Promise.all(goalList.map((gl) => fetch(`/api/reflections?goalId=${gl.id}`).then((r) => r.json())));
+        setReflections(rResults.flat());
+      } else {
+        setReflections([]);
+      }
+      setFetchError(null);
+    } catch (e) {
+      setFetchError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
@@ -79,6 +93,15 @@ export default function DashboardPage() {
         ))}
         {/* グラフ */}
         <div className="rounded-xl bg-gray-100 h-48 mt-2" />
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="p-4 mt-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 whitespace-pre-wrap">
+        <div className="font-bold mb-1">データ読み込みエラー</div>
+        {fetchError}
       </div>
     );
   }
