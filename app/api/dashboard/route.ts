@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
   monday.setDate(monday.getDate() + mondayOffset);
   const weekStart = monday.toISOString().split('T')[0];
 
+  try {
   const [goals, actions, totals, weekTotals, todayRows, chartRows, setting, reflections] = await Promise.all([
     query(
       'SELECT id, name, description, deadline FROM goals WHERE user_id=$1 ORDER BY created_at ASC',
@@ -72,4 +73,8 @@ export async function GET(req: NextRequest) {
     qualitative: setting[0]?.value ?? '',
     reflections,
   });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
