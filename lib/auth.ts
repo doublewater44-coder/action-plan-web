@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server';
 
 const COOKIE_NAME = 'ap-auth';
 const SECRET = new TextEncoder().encode(process.env.JWT_SECRET ?? 'fallback-secret');
-const EXPIRES_IN = 60 * 60 * 24 * 30; // 30日
+const EXPIRES_IN = 60 * 60 * 24 * 90; // 90日
 
 export type JWTPayload = { userId: number; displayName: string };
 
