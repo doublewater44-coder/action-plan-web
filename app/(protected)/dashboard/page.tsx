@@ -32,55 +32,27 @@ export default function DashboardPage() {
   const [quote, setQuote] = useState<{ text: string; author: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [warmingUp, setWarmingUp] = useState(false);
 
-  const fetchAll = useCallback(async (retry = 0) => {
+  const fetchAll = useCallback(async () => {
     try {
-      const responses = await Promise.all([
-        fetch('/api/goals'),
-        fetch('/api/actions'),
-        fetch('/api/progress/totals'),
-        fetch('/api/settings?key=qualitative_goal'),
-      ]);
-      const texts = await Promise.all(responses.map(r => r.text()));
-
-      // DBが起動中のとき自動リトライ（ブラウザ側で最大5回 × 5秒）
-      const isSchemaError = responses.some((r, i) =>
-        !r.ok && (texts[i].includes('schema cache') || texts[i].includes('Retrying') || texts[i].includes('TIMEOUT'))
-      );
-      if (isSchemaError) {
-        if (retry < 5) {
-          setWarmingUp(true);
-          setTimeout(() => fetchAll(retry + 1), 5000);
-          return;
-        }
-        setFetchError('データベースの起動に時間がかかっています。ページを更新してください。');
+      const res = await fetch('/api/dashboard');
+      if (!res.ok) {
+        const text = await res.text();
+        setFetchError(`API エラー: ${text.slice(0, 200)}`);
         setLoading(false);
         return;
       }
-
-      const failedRes = responses.find((r, i) => !r.ok && texts[i]);
-      if (failedRes) {
-        const i = responses.indexOf(failedRes);
-        setFetchError(`API エラー: ${texts[i].slice(0, 200)}`);
-        setLoading(false);
-        return;
-      }
-
-      const [g, a, t, s] = texts.map(t => JSON.parse(t));
-      setGoals(Array.isArray(g) ? g : []);
-      setActions(Array.isArray(a) ? a : []);
-      setTotals(t ?? { totals: {}, weekTotals: {}, today: {}, chart: [] });
-      setQualitative(s?.value ?? '');
-
-      const goalList: Goal[] = Array.isArray(g) ? g : [];
-      if (goalList.length > 0) {
-        const rResults = await Promise.all(goalList.map((gl) => fetch(`/api/reflections?goalId=${gl.id}`).then((r) => r.json())));
-        setReflections(rResults.flat());
-      } else {
-        setReflections([]);
-      }
-      setWarmingUp(false);
+      const d = await res.json();
+      setGoals(d.goals ?? []);
+      setActions(d.actions ?? []);
+      setTotals({
+        totals: d.totals ?? {},
+        weekTotals: d.weekTotals ?? {},
+        today: d.today ?? {},
+        chart: d.chart ?? [],
+      });
+      setQualitative(d.qualitative ?? '');
+      setReflections(d.reflections ?? []);
       setFetchError(null);
     } catch (e) {
       setFetchError(e instanceof Error ? e.message : String(e));
@@ -112,11 +84,6 @@ export default function DashboardPage() {
         ))}
         {/* グラフ */}
         <div className="rounded-xl bg-gray-100 h-48 mt-2" />
-        {warmingUp && (
-          <div className="mt-4 text-center text-xs text-gray-400">
-            データベース起動中... しばらくお待ちください
-          </div>
-        )}
       </div>
     );
   }
