@@ -6,10 +6,10 @@ export function getPool(): Pool {
   if (!pool) {
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      max: 10,
-      min: 1,
+      max: 3,
+      min: 0,
+      idleTimeoutMillis: 10000,
       keepAlive: true,
-      keepAliveInitialDelayMillis: 10000,
     });
   }
   return pool;
