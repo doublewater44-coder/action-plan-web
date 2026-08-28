@@ -328,7 +328,7 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
                     {rows.length === 0 ? (
                       <p className="text-xs text-gray-400">まだ進捗データがありません</p>
                     ) : (
-                      <ProgressChart rows={rows} target={Number(a.target_count)} unit={a.unit} />
+                      <ProgressChart rows={rows} target={Number(a.target_count)} unit={a.unit} deadline={a.deadline} />
                     )}
                   </div>
                 );
