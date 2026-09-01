@@ -163,6 +163,8 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: editActionName, targetCount: editActionTarget, unit: editActionUnit, deadline: editActionDl || null }),
     });
+    // 次のアクションプランに切り替えるので進捗をリセット
+    await fetch(`/api/actions/${id}/reset`, { method: 'POST' });
     setEditActionId(null);
     onRefresh();
   }
