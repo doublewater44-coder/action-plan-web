@@ -516,7 +516,7 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
       {achievements.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
           <button onClick={() => setOpenAchievements(!openAchievements)} className="w-full px-4 py-3 flex items-center justify-between text-sm font-medium text-gray-700 hover:bg-gray-50">
-            <span>🏆 達成したゴール（{achievements.length}件）</span>
+            <span>🏆 達成したゴール・アクション（{achievements.length}件）</span>
             <span>{openAchievements ? '▲' : '▼'}</span>
           </button>
           {openAchievements && (

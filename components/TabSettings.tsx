@@ -11,6 +11,7 @@ type Action = {
   unit: string;
   period: string;
   deadline?: string;
+  reset_at?: string;
   goal_name: string;
 };
 
@@ -28,7 +29,6 @@ interface EditForm {
 }
 
 export default function TabSettings({ goals, actions, onRefresh }: Props) {
-  // 追加フォームの state
   const [goalId, setGoalId] = useState<number>(goals[0]?.id ?? 0);
   const [newName, setNewName] = useState('');
   const [newTargetCount, setNewTargetCount] = useState<number>(0);
@@ -37,12 +37,12 @@ export default function TabSettings({ goals, actions, onRefresh }: Props) {
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState('');
 
-  // 編集フォームの state
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<EditForm>({ name: '', targetCount: 0, unit: '件', deadline: '' });
   const [editLoading, setEditLoading] = useState(false);
 
-  // ゴール別にアクションをグループ化
+  const [resetConfirmId, setResetConfirmId] = useState<number | null>(null);
+
   const actionsByGoal: Record<number, Action[]> = {};
   for (const goal of goals) {
     actionsByGoal[goal.id] = [];
@@ -91,6 +91,7 @@ export default function TabSettings({ goals, actions, onRefresh }: Props) {
 
   function startEdit(action: Action) {
     setEditingId(action.id);
+    setResetConfirmId(null);
     setEditForm({
       name: action.name,
       targetCount: action.target_count,
@@ -120,7 +121,7 @@ export default function TabSettings({ goals, actions, onRefresh }: Props) {
       setEditingId(null);
       onRefresh();
     } catch {
-      // エラーは静かに処理（必要であればトースト追加可）
+      // silent
     } finally {
       setEditLoading(false);
     }
@@ -129,6 +130,16 @@ export default function TabSettings({ goals, actions, onRefresh }: Props) {
   async function handleDelete(id: number) {
     try {
       await fetch(`/api/actions/${id}`, { method: 'DELETE' });
+      onRefresh();
+    } catch {
+      // silent
+    }
+  }
+
+  async function handleReset(id: number) {
+    try {
+      await fetch(`/api/actions/${id}/reset`, { method: 'POST' });
+      setResetConfirmId(null);
       onRefresh();
     } catch {
       // silent
@@ -144,7 +155,6 @@ export default function TabSettings({ goals, actions, onRefresh }: Props) {
           アクションを追加
         </h2>
         <form onSubmit={handleAdd} className="space-y-3">
-          {/* ゴール選択 */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">ゴール</label>
             <select
@@ -153,14 +163,11 @@ export default function TabSettings({ goals, actions, onRefresh }: Props) {
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-gray-50"
             >
               {goals.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
+                <option key={g.id} value={g.id}>{g.name}</option>
               ))}
             </select>
           </div>
 
-          {/* アクション名 */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">アクション名</label>
             <input
@@ -172,7 +179,6 @@ export default function TabSettings({ goals, actions, onRefresh }: Props) {
             />
           </div>
 
-          {/* 目標数値 + 単位 */}
           <div className="flex gap-3">
             <div className="flex-1">
               <label className="block text-xs font-medium text-gray-600 mb-1">目標数値</label>
@@ -196,7 +202,6 @@ export default function TabSettings({ goals, actions, onRefresh }: Props) {
             </div>
           </div>
 
-          {/* 期日 */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">期日（任意）</label>
             <input
@@ -231,19 +236,16 @@ export default function TabSettings({ goals, actions, onRefresh }: Props) {
           const goalActions = actionsByGoal[goal.id] ?? [];
           return (
             <div key={goal.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-              {/* ゴールヘッダー */}
               <div className="bg-gradient-to-r from-green-600 to-teal-600 px-4 py-2.5">
                 <span className="text-white text-xs font-bold">{goal.name}</span>
               </div>
 
-              {/* アクション行 */}
               {goalActions.length === 0 ? (
                 <p className="text-xs text-gray-400 px-4 py-3">アクションがありません。</p>
               ) : (
                 <ul className="divide-y divide-gray-50">
                   {goalActions.map((action) =>
                     editingId === action.id ? (
-                      /* 編集フォーム */
                       <li key={action.id} className="px-4 py-3 bg-blue-50">
                         <div className="space-y-2">
                           <div>
@@ -303,31 +305,61 @@ export default function TabSettings({ goals, actions, onRefresh }: Props) {
                         </div>
                       </li>
                     ) : (
-                      /* 通常行 */
-                      <li key={action.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-800 truncate">{action.name}</p>
-                          <p className="text-xs text-gray-400 mt-0.5">
-                            目標: {action.target_count} {action.unit}
-                            {action.deadline && (
-                              <span className="ml-2 text-teal-600">期日: {action.deadline}</span>
-                            )}
-                          </p>
+                      <li key={action.id} className="px-4 py-3 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-800 truncate">{action.name}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              目標: {action.target_count} {action.unit}
+                              {action.deadline && (
+                                <span className="ml-2 text-teal-600">期日: {action.deadline}</span>
+                              )}
+                              {action.reset_at && (
+                                <span className="ml-2 text-orange-500">リセット済: {action.reset_at}</span>
+                              )}
+                            </p>
+                          </div>
+                          <div className="flex gap-1.5 shrink-0">
+                            <button
+                              onClick={() => startEdit(action)}
+                              className="text-xs text-blue-600 border border-blue-200 rounded-lg px-2.5 py-1 hover:bg-blue-50 transition-colors"
+                            >
+                              編集
+                            </button>
+                            <button
+                              onClick={() => setResetConfirmId(resetConfirmId === action.id ? null : action.id)}
+                              className="text-xs text-orange-600 border border-orange-200 rounded-lg px-2.5 py-1 hover:bg-orange-50 transition-colors"
+                            >
+                              🔄 リセット
+                            </button>
+                            <button
+                              onClick={() => handleDelete(action.id)}
+                              className="text-xs text-red-500 border border-red-200 rounded-lg px-2.5 py-1 hover:bg-red-50 transition-colors"
+                            >
+                              削除
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex gap-1.5 shrink-0">
-                          <button
-                            onClick={() => startEdit(action)}
-                            className="text-xs text-blue-600 border border-blue-200 rounded-lg px-2.5 py-1 hover:bg-blue-50 transition-colors"
-                          >
-                            編集
-                          </button>
-                          <button
-                            onClick={() => handleDelete(action.id)}
-                            className="text-xs text-red-500 border border-red-200 rounded-lg px-2.5 py-1 hover:bg-red-50 transition-colors"
-                          >
-                            削除
-                          </button>
-                        </div>
+                        {/* リセット確認 */}
+                        {resetConfirmId === action.id && (
+                          <div className="mt-2 pt-2 border-t border-orange-100 bg-orange-50 rounded-lg px-3 py-2">
+                            <p className="text-xs text-orange-700 font-medium mb-2">本日からカウントをリセットします。過去データは保持されます。</p>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleReset(action.id)}
+                                className="text-xs bg-orange-500 text-white px-3 py-1.5 rounded-lg hover:bg-orange-600"
+                              >
+                                リセットする
+                              </button>
+                              <button
+                                onClick={() => setResetConfirmId(null)}
+                                className="text-xs border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50"
+                              >
+                                キャンセル
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </li>
                     )
                   )}

@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
   try {
     // Schema setup & one-time migration
     await query(`ALTER TABLE goals ADD COLUMN IF NOT EXISTS achieved_at DATE`);
+    await query(`ALTER TABLE actions ADD COLUMN IF NOT EXISTS reset_at DATE`);
     await query(`
       CREATE TABLE IF NOT EXISTS goal_achievements (
         id SERIAL PRIMARY KEY,
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest) {
         [userId]
       ),
       query(
-        `SELECT a.id, a.goal_id, a.name, a.target_count, a.unit, a.period, a.deadline, g.name AS goal_name
+        `SELECT a.id, a.goal_id, a.name, a.target_count, a.unit, a.period, a.deadline, a.reset_at, g.name AS goal_name
          FROM actions a JOIN goals g ON a.goal_id=g.id
          WHERE g.user_id=$1 ORDER BY a.goal_id, a.created_at ASC`,
         [userId]
@@ -66,19 +67,22 @@ export async function GET(req: NextRequest) {
       query<{ action_id: number; total: string }>(
         `SELECT dp.action_id, COALESCE(SUM(dp.count),0) AS total
          FROM daily_progress dp JOIN actions a ON dp.action_id=a.id JOIN goals g ON a.goal_id=g.id
-         WHERE g.user_id=$1 GROUP BY dp.action_id`,
+         WHERE g.user_id=$1 AND (a.reset_at IS NULL OR dp.progress_date >= a.reset_at)
+         GROUP BY dp.action_id`,
         [userId]
       ),
       query<{ action_id: number; total: string }>(
         `SELECT dp.action_id, COALESCE(SUM(dp.count),0) AS total
          FROM daily_progress dp JOIN actions a ON dp.action_id=a.id JOIN goals g ON a.goal_id=g.id
-         WHERE g.user_id=$1 AND dp.progress_date>=$2 GROUP BY dp.action_id`,
+         WHERE g.user_id=$1 AND dp.progress_date>=$2 AND (a.reset_at IS NULL OR dp.progress_date >= a.reset_at)
+         GROUP BY dp.action_id`,
         [userId, weekStart]
       ),
       query<{ action_id: number; progress_date: string; count: number; note: string }>(
         `SELECT dp.action_id, dp.progress_date, dp.count, dp.note
          FROM daily_progress dp JOIN actions a ON dp.action_id=a.id JOIN goals g ON a.goal_id=g.id
-         WHERE g.user_id=$1 ORDER BY dp.action_id, dp.progress_date ASC`,
+         WHERE g.user_id=$1 AND (a.reset_at IS NULL OR dp.progress_date >= a.reset_at)
+         ORDER BY dp.action_id, dp.progress_date ASC`,
         [userId]
       ),
       query<{ action_id: number; count: number; note: string; progress_date: string }>(
