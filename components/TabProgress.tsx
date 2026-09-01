@@ -521,19 +521,34 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
           </button>
           {openAchievements && (
             <div className="px-4 pb-4 space-y-3">
-              {achievements.map((a) => (
-                <div key={a.id} className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-amber-200 rounded-xl p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-bold text-amber-800 text-sm">🏆 {a.name}</p>
-                    <span className="text-xs bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full font-medium shrink-0">達成済</span>
+              {achievements.map((a) => {
+                const relatedActions = actions.filter((ac) => ac.goal_id === a.goal_id);
+                return (
+                  <div key={a.id} className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-amber-200 rounded-xl p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-bold text-amber-800 text-sm">🏆 {a.name}</p>
+                      <span className="text-xs bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full font-medium shrink-0">達成済</span>
+                    </div>
+                    {a.description && <p className="text-xs text-amber-700 mt-1">{a.description}</p>}
+                    <div className="mt-2 text-xs text-amber-600 space-y-0.5">
+                      {a.deadline && <p>期日: {a.deadline}</p>}
+                      <p>達成日: {a.achieved_at}</p>
+                    </div>
+                    {relatedActions.length > 0 && (
+                      <div className="mt-3 pt-2 border-t border-amber-200">
+                        <p className="text-xs font-semibold text-amber-700 mb-1">📋 アクション</p>
+                        <ul className="space-y-0.5">
+                          {relatedActions.map((ac) => (
+                            <li key={ac.id} className="text-xs text-amber-700">
+                              ・{ac.name}（目標: {ac.target_count} {ac.unit}）
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
-                  {a.description && <p className="text-xs text-amber-700 mt-1">{a.description}</p>}
-                  <div className="mt-2 text-xs text-amber-600 space-y-0.5">
-                    {a.deadline && <p>期日: {a.deadline}</p>}
-                    <p>達成日: {a.achieved_at}</p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
