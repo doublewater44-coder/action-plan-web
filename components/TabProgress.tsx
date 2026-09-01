@@ -9,6 +9,7 @@ type Action = { id: number; goal_id: number; name: string; target_count: number;
 type Totals = { totals: Record<number, number>; weekTotals: Record<number, number>; today: Record<number, { count: number; note: string }> };
 type ChartRow = { action_id: number; progress_date: string; count: number; note: string };
 type Reflection = { id: number; goal_id: number; week_start: string; good_points: string; bad_points: string; next_goal: string; score: number };
+type Achievement = { id: number; name: string; description?: string; deadline?: string; achieved_at: string };
 
 interface Props {
   goals: Goal[];
@@ -17,8 +18,10 @@ interface Props {
   chart: ChartRow[];
   reflections: Reflection[];
   qualitative: string;
+  achievements: Achievement[];
   onRefresh: () => void;
   onSaved: (quote: { text: string; author: string }) => void;
+  onAchieve: (goalId: number) => void;
 }
 
 function daysLabel(deadline?: string) {
@@ -46,7 +49,7 @@ const QUOTES = [
   { text: '今日の積み重ねが明日の自分を作る。', author: '日本のことわざ' },
 ];
 
-export default function TabProgress({ goals, actions, totals, chart, reflections, qualitative, onRefresh, onSaved }: Props) {
+export default function TabProgress({ goals, actions, totals, chart, reflections, qualitative, achievements, onRefresh, onSaved, onAchieve }: Props) {
   const [editQ, setEditQ] = useState(false);
   const [qVal, setQVal] = useState(qualitative);
   const [manageGoals, setManageGoals] = useState(false);
@@ -59,6 +62,8 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
   const [openMemos, setOpenMemos] = useState(false);
   const [openHistory, setOpenHistory] = useState(false);
   const [openReflIds, setOpenReflIds] = useState<Set<number>>(new Set());
+  const [achieveConfirmId, setAchieveConfirmId] = useState<number | null>(null);
+  const [openAchievements, setOpenAchievements] = useState(false);
 
   // ゴール追加フォーム
   const [newGoalName, setNewGoalName] = useState('');
@@ -170,7 +175,10 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
               <div key={g.id} className="border border-blue-200 rounded-lg p-3 mb-2 bg-blue-50">
                 <input className={`${inputCls} w-full mb-2`} value={editGoalName} onChange={(e) => setEditGoalName(e.target.value)} placeholder="ゴール名" />
                 <div className="grid grid-cols-2 gap-2 mb-2">
-                  <input className={inputCls} type="date" value={editGoalDl} onChange={(e) => setEditGoalDl(e.target.value)} />
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-0.5">期限</label>
+                    <input className={inputCls} type="date" value={editGoalDl} onChange={(e) => setEditGoalDl(e.target.value)} />
+                  </div>
                   <input className={inputCls} value={editGoalDesc} onChange={(e) => setEditGoalDesc(e.target.value)} placeholder="補足" />
                 </div>
                 <div className="flex gap-2">
@@ -193,7 +201,10 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
             <div className="border border-green-200 rounded-lg p-3 bg-green-50 mt-2">
               <input className={`${inputCls} w-full mb-2`} value={newGoalName} onChange={(e) => setNewGoalName(e.target.value)} placeholder="ゴール名（例：今月20件の新規契約）" />
               <div className="grid grid-cols-2 gap-2 mb-2">
-                <input className={inputCls} type="date" value={newGoalDl} onChange={(e) => setNewGoalDl(e.target.value)} />
+                <div>
+                  <label className="block text-xs text-gray-500 mb-0.5">期限</label>
+                  <input className={inputCls} type="date" value={newGoalDl} onChange={(e) => setNewGoalDl(e.target.value)} />
+                </div>
                 <input className={inputCls} value={newGoalDesc} onChange={(e) => setNewGoalDesc(e.target.value)} placeholder="補足（任意）" />
               </div>
               <div className="flex gap-2">
@@ -216,7 +227,7 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
           <p className="text-xs text-gray-500">今日: {new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}</p>
         </div>
         {!manageGoals && (
-          <button onClick={() => setManageGoals(true)} className="text-xs border border-gray-300 rounded-lg px-3 py-1.5 hover:bg-gray-50">🔧 修正</button>
+          <button onClick={() => setManageGoals(true)} className="text-xs border border-gray-300 rounded-lg px-3 py-1.5 hover:bg-gray-50">🎯 定量ゴール追加・修正</button>
         )}
         {!manageGoals && actions.length > 0 && (
           <button
@@ -283,9 +294,21 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
           const goal = goalMap[Number(gid)];
           return (
             <div key={gid}>
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-green-500 rounded-r-lg px-3 py-2 mb-2">
-                <p className="text-xs text-green-700 font-bold">定量ゴール</p>
-                <p className="text-sm font-bold text-green-800">🎯 {goal?.name ?? '不明'}{goal && daysLabel(goal.deadline)}</p>
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-green-500 rounded-r-lg px-3 py-2 mb-2 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs text-green-700 font-bold">定量ゴール</p>
+                  <p className="text-sm font-bold text-green-800 truncate">🎯 {goal?.name ?? '不明'}{goal && daysLabel(goal.deadline)}</p>
+                </div>
+                <div className="shrink-0">
+                  {achieveConfirmId === Number(gid) ? (
+                    <div className="flex gap-1">
+                      <button onClick={() => { onAchieve(Number(gid)); setAchieveConfirmId(null); }} className="text-xs bg-amber-500 text-white px-2 py-1 rounded-lg hover:bg-amber-600">✓ 確認</button>
+                      <button onClick={() => setAchieveConfirmId(null)} className="text-xs border border-gray-300 px-2 py-1 rounded-lg hover:bg-gray-50">×</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setAchieveConfirmId(Number(gid))} className="text-xs text-amber-600 border border-amber-300 rounded-lg px-2 py-1 hover:bg-amber-50">🏆 達成</button>
+                  )}
+                </div>
               </div>
               {gActions.map((a) => {
                 const total = totals.totals[a.id] ?? 0;
@@ -417,6 +440,32 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
           </div>
         )}
       </div>
+      {/* 達成したゴール */}
+      {achievements.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <button onClick={() => setOpenAchievements(!openAchievements)} className="w-full px-4 py-3 flex items-center justify-between text-sm font-medium text-gray-700 hover:bg-gray-50">
+            <span>🏆 達成したゴール（{achievements.length}件）</span>
+            <span>{openAchievements ? '▲' : '▼'}</span>
+          </button>
+          {openAchievements && (
+            <div className="px-4 pb-4 space-y-3">
+              {achievements.map((a) => (
+                <div key={a.id} className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-amber-200 rounded-xl p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-bold text-amber-800 text-sm">🏆 {a.name}</p>
+                    <span className="text-xs bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full font-medium shrink-0">達成済</span>
+                  </div>
+                  {a.description && <p className="text-xs text-amber-700 mt-1">{a.description}</p>}
+                  <div className="mt-2 text-xs text-amber-600 space-y-0.5">
+                    {a.deadline && <p>期日: {a.deadline}</p>}
+                    <p>達成日: {a.achieved_at}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

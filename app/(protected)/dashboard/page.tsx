@@ -14,6 +14,7 @@ type Goal = { id: number; name: string; description?: string; deadline?: string 
 type Action = { id: number; goal_id: number; name: string; target_count: number; unit: string; period: string; deadline?: string; goal_name: string };
 type Totals = { totals: Record<number, number>; weekTotals: Record<number, number>; today: Record<number, { count: number; note: string }>; chart: Array<{ action_id: number; progress_date: string; count: number; note: string }> };
 type Reflection = { id: number; goal_id: number; week_start: string; good_points: string; bad_points: string; next_goal: string; score: number };
+type Achievement = { id: number; name: string; description?: string; deadline?: string; achieved_at: string };
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'progress', label: '📊 進捗状況' },
@@ -28,10 +29,12 @@ export default function DashboardPage() {
   const [actions, setActions] = useState<Action[]>([]);
   const [totals, setTotals] = useState<Totals>({ totals: {}, weekTotals: {}, today: {}, chart: [] });
   const [reflections, setReflections] = useState<Reflection[]>([]);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [qualitative, setQualitative] = useState('');
   const [quote, setQuote] = useState<{ text: string; author: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [showWeeklyPopup, setShowWeeklyPopup] = useState(false);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -53,6 +56,7 @@ export default function DashboardPage() {
       });
       setQualitative(d.qualitative ?? '');
       setReflections(d.reflections ?? []);
+      setAchievements(d.achievements ?? []);
       setFetchError(null);
     } catch (e) {
       setFetchError(e instanceof Error ? e.message : String(e));
@@ -63,18 +67,33 @@ export default function DashboardPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  useEffect(() => {
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+    const day = new Date(today + 'T00:00:00').getDay();
+    const dismissed = sessionStorage.getItem('weeklyPopupDismissed');
+    if (day === 0 && !dismissed) setShowWeeklyPopup(true);
+  }, []);
+
+  function dismissWeeklyPopup(goToWeekly = false) {
+    sessionStorage.setItem('weeklyPopupDismissed', '1');
+    setShowWeeklyPopup(false);
+    if (goToWeekly) setActiveTab('weekly');
+  }
+
+  async function handleAchieve(goalId: number) {
+    await fetch(`/api/goals/${goalId}/achieve`, { method: 'POST' });
+    fetchAll();
+  }
+
   if (loading) {
     return (
       <div className="animate-pulse">
-        {/* タブナビ skeleton */}
         <div className="flex border-b border-gray-200 mb-4 -mx-4 px-4 bg-white sticky top-[53px] z-10 gap-2">
           {['w-24', 'w-16', 'w-24', 'w-28'].map((w, i) => (
             <div key={i} className={`${w} h-10 my-1.5 rounded bg-gray-200`} />
           ))}
         </div>
-        {/* 定性ゴール */}
         <div className="rounded-xl bg-gray-100 h-16 mb-4" />
-        {/* アクションカード × 3 */}
         {[1, 2, 3].map((i) => (
           <div key={i} className="rounded-xl border border-gray-200 p-4 mb-3">
             <div className="h-4 bg-gray-200 rounded w-1/2 mb-3" />
@@ -82,7 +101,6 @@ export default function DashboardPage() {
             <div className="h-2 bg-gray-200 rounded-full w-full" />
           </div>
         ))}
-        {/* グラフ */}
         <div className="rounded-xl bg-gray-100 h-48 mt-2" />
       </div>
     );
@@ -99,6 +117,31 @@ export default function DashboardPage() {
 
   return (
     <div>
+      {/* 日曜ポップアップ */}
+      {showWeeklyPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full">
+            <div className="text-4xl text-center mb-3">📝</div>
+            <h2 className="text-lg font-bold text-center text-gray-800 mb-2">週次振り返りをしましょう！</h2>
+            <p className="text-sm text-gray-500 text-center mb-6">今週を振り返って、来週につなげましょう。</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => dismissWeeklyPopup(true)}
+                className="flex-1 py-2.5 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700"
+              >
+                振り返りへ →
+              </button>
+              <button
+                onClick={() => dismissWeeklyPopup(false)}
+                className="px-4 py-2.5 border border-gray-300 rounded-xl text-sm text-gray-600 hover:bg-gray-50"
+              >
+                後で
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* タブナビ */}
       <div className="flex border-b border-gray-200 mb-4 -mx-4 px-4 bg-white sticky top-[53px] z-10 overflow-x-auto">
         {TABS.map((t) => (
@@ -132,8 +175,10 @@ export default function DashboardPage() {
           chart={totals.chart}
           reflections={reflections}
           qualitative={qualitative}
+          achievements={achievements}
           onRefresh={fetchAll}
           onSaved={setQuote}
+          onAchieve={handleAchieve}
         />
       )}
 
