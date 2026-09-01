@@ -315,7 +315,7 @@ export default function TabSettings({ goals, actions, onRefresh }: Props) {
                                 <span className="ml-2 text-teal-600">期日: {action.deadline}</span>
                               )}
                               {action.reset_at && (
-                                <span className="ml-2 text-orange-500">リセット済: {action.reset_at}</span>
+                                <span className="ml-2 text-orange-500">リセット済: {String(action.reset_at).slice(0, 10)}</span>
                               )}
                             </p>
                           </div>

@@ -15,6 +15,8 @@ type Action = { id: number; goal_id: number; name: string; target_count: number;
 type Totals = { totals: Record<number, number>; weekTotals: Record<number, number>; today: Record<number, { count: number; note: string }>; chart: Array<{ action_id: number; progress_date: string; count: number; note: string }> };
 type Reflection = { id: number; goal_id: number; week_start: string; good_points: string; bad_points: string; next_goal: string; score: number };
 type Achievement = { id: number; goal_id: number; name: string; description?: string; deadline?: string; achieved_at: string };
+type GoalAchievementAction = { id: number; goal_achievement_id: number; action_name: string; target_count: number; unit: string; actual_count: number };
+type ActionAchievement = { id: number; action_id: number; action_name: string; target_count: number; unit: string; actual_count: number; achieved_at: string };
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'progress', label: '📊 進捗状況' },
@@ -30,6 +32,8 @@ export default function DashboardPage() {
   const [totals, setTotals] = useState<Totals>({ totals: {}, weekTotals: {}, today: {}, chart: [] });
   const [reflections, setReflections] = useState<Reflection[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [goalAchievementActions, setGoalAchievementActions] = useState<GoalAchievementAction[]>([]);
+  const [actionAchievements, setActionAchievements] = useState<ActionAchievement[]>([]);
   const [qualitative, setQualitative] = useState('');
   const [quote, setQuote] = useState<{ text: string; author: string } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,6 +61,8 @@ export default function DashboardPage() {
       setQualitative(d.qualitative ?? '');
       setReflections(d.reflections ?? []);
       setAchievements(d.achievements ?? []);
+      setGoalAchievementActions(d.goalAchievementActions ?? []);
+      setActionAchievements(d.actionAchievements ?? []);
       setFetchError(null);
     } catch (e) {
       setFetchError(e instanceof Error ? e.message : String(e));
@@ -82,6 +88,15 @@ export default function DashboardPage() {
 
   async function handleAchieve(goalId: number, achievedAt: string) {
     await fetch(`/api/goals/${goalId}/achieve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ achievedAt }),
+    });
+    fetchAll();
+  }
+
+  async function handleActionAchieve(actionId: number, achievedAt: string) {
+    await fetch(`/api/actions/${actionId}/achieve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ achievedAt }),
@@ -163,14 +178,12 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* 名言ボックス（保存後に表示） */}
       {quote && (
         <div onClick={() => setQuote(null)} className="cursor-pointer">
           <QuoteBox text={quote.text} author={quote.author} />
         </div>
       )}
 
-      {/* タブコンテンツ */}
       {activeTab === 'progress' && (
         <TabProgress
           goals={goals}
@@ -180,9 +193,12 @@ export default function DashboardPage() {
           reflections={reflections}
           qualitative={qualitative}
           achievements={achievements}
+          goalAchievementActions={goalAchievementActions}
+          actionAchievements={actionAchievements}
           onRefresh={fetchAll}
           onSaved={setQuote}
           onAchieve={handleAchieve}
+          onActionAchieve={handleActionAchieve}
         />
       )}
 
