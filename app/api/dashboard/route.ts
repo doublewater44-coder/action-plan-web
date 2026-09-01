@@ -67,21 +67,21 @@ export async function GET(req: NextRequest) {
       query<{ action_id: number; total: string }>(
         `SELECT dp.action_id, COALESCE(SUM(dp.count),0) AS total
          FROM daily_progress dp JOIN actions a ON dp.action_id=a.id JOIN goals g ON a.goal_id=g.id
-         WHERE g.user_id=$1 AND (a.reset_at IS NULL OR dp.progress_date >= a.reset_at)
+         WHERE g.user_id=$1 AND (a.reset_at IS NULL OR dp.progress_date::date >= a.reset_at)
          GROUP BY dp.action_id`,
         [userId]
       ),
       query<{ action_id: number; total: string }>(
         `SELECT dp.action_id, COALESCE(SUM(dp.count),0) AS total
          FROM daily_progress dp JOIN actions a ON dp.action_id=a.id JOIN goals g ON a.goal_id=g.id
-         WHERE g.user_id=$1 AND dp.progress_date>=$2 AND (a.reset_at IS NULL OR dp.progress_date >= a.reset_at)
+         WHERE g.user_id=$1 AND dp.progress_date>=$2 AND (a.reset_at IS NULL OR dp.progress_date::date >= a.reset_at)
          GROUP BY dp.action_id`,
         [userId, weekStart]
       ),
       query<{ action_id: number; progress_date: string; count: number; note: string }>(
         `SELECT dp.action_id, dp.progress_date, dp.count, dp.note
          FROM daily_progress dp JOIN actions a ON dp.action_id=a.id JOIN goals g ON a.goal_id=g.id
-         WHERE g.user_id=$1 AND (a.reset_at IS NULL OR dp.progress_date >= a.reset_at)
+         WHERE g.user_id=$1 AND (a.reset_at IS NULL OR dp.progress_date::date >= a.reset_at)
          ORDER BY dp.action_id, dp.progress_date ASC`,
         [userId]
       ),
