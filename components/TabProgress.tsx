@@ -308,11 +308,12 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
                       </div>
                       <button
                         onClick={() => {
-                          onAchieve(Number(gid));
                           setAchieveConfirmId(null);
                           setManageGoals(true);
-                          setShowAddGoal(true);
-                          setNewGoalName(goal?.name ?? '');
+                          setEditGoalId(Number(gid));
+                          setEditGoalName(goal?.name ?? '');
+                          setEditGoalDesc(goal?.description ?? '');
+                          setEditGoalDl(goal?.deadline ?? '');
                         }}
                         className="text-xs bg-green-600 text-white px-2 py-1 rounded-lg hover:bg-green-700 whitespace-nowrap"
                       >
