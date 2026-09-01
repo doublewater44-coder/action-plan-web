@@ -301,9 +301,23 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
                 </div>
                 <div className="shrink-0">
                   {achieveConfirmId === Number(gid) ? (
-                    <div className="flex gap-1">
-                      <button onClick={() => { onAchieve(Number(gid)); setAchieveConfirmId(null); }} className="text-xs bg-amber-500 text-white px-2 py-1 rounded-lg hover:bg-amber-600">✓ 確認</button>
-                      <button onClick={() => setAchieveConfirmId(null)} className="text-xs border border-gray-300 px-2 py-1 rounded-lg hover:bg-gray-50">×</button>
+                    <div className="flex flex-col gap-1 items-end">
+                      <div className="flex gap-1">
+                        <button onClick={() => { onAchieve(Number(gid)); setAchieveConfirmId(null); }} className="text-xs bg-amber-500 text-white px-2 py-1 rounded-lg hover:bg-amber-600">✓ 達成のみ</button>
+                        <button onClick={() => setAchieveConfirmId(null)} className="text-xs border border-gray-300 px-2 py-1 rounded-lg hover:bg-gray-50">×</button>
+                      </div>
+                      <button
+                        onClick={() => {
+                          onAchieve(Number(gid));
+                          setAchieveConfirmId(null);
+                          setManageGoals(true);
+                          setShowAddGoal(true);
+                          setNewGoalName(goal?.name ?? '');
+                        }}
+                        className="text-xs bg-green-600 text-white px-2 py-1 rounded-lg hover:bg-green-700 whitespace-nowrap"
+                      >
+                        ＋ 次の目標を立てる
+                      </button>
                     </div>
                   ) : (
                     <button onClick={() => setAchieveConfirmId(Number(gid))} className="text-xs text-amber-600 border border-amber-300 rounded-lg px-2 py-1 hover:bg-amber-50">🏆 達成</button>
