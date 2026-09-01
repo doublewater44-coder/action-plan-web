@@ -64,6 +64,7 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
   const [openReflIds, setOpenReflIds] = useState<Set<number>>(new Set());
   const [achieveConfirmId, setAchieveConfirmId] = useState<number | null>(null);
   const [achieveDate, setAchieveDate] = useState(() => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' }));
+  const [nextGoalSetIds, setNextGoalSetIds] = useState<Set<number>>(new Set());
   const [openAchievements, setOpenAchievements] = useState(false);
 
   // ゴール追加フォーム
@@ -308,9 +309,10 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
                   <div className="shrink-0 flex gap-1 items-center">
                     {!isConfirming && (
                       <>
-                        {achievedGoalIds.has(Number(gid)) && (
+                        {achievedGoalIds.has(Number(gid)) && !nextGoalSetIds.has(Number(gid)) && (
                           <button
                             onClick={() => {
+                              setNextGoalSetIds((s) => new Set(s).add(Number(gid)));
                               setManageGoals(true);
                               setEditGoalId(Number(gid));
                               setEditGoalName(goal?.name ?? '');
@@ -353,6 +355,7 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
                       <button
                         onClick={async () => {
                           await onAchieve(Number(gid), achieveDate);
+                          setNextGoalSetIds((s) => new Set(s).add(Number(gid)));
                           setAchieveConfirmId(null);
                           setManageGoals(true);
                           setEditGoalId(Number(gid));
