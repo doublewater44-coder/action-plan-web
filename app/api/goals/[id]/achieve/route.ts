@@ -7,12 +7,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
-  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+  const body = await req.json();
+  const achievedAt: string = body.achievedAt;
 
-  await query(`ALTER TABLE goals ADD COLUMN IF NOT EXISTS achieved_at DATE`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS goal_achievements (
+      id SERIAL PRIMARY KEY,
+      goal_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      deadline DATE,
+      achieved_at DATE NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  const rows = await query<{ name: string; description: string; deadline: string }>(
+    'SELECT name, description, deadline FROM goals WHERE id=$1 AND user_id=$2',
+    [id, session.userId]
+  );
+  if (!rows.length) return NextResponse.json({ error: 'Goal not found' }, { status: 404 });
+
+  const g = rows[0];
   await query(
-    'UPDATE goals SET achieved_at = $1 WHERE id = $2 AND user_id = $3',
-    [today, id, session.userId]
+    'INSERT INTO goal_achievements (goal_id, name, description, deadline, achieved_at) VALUES ($1,$2,$3,$4,$5)',
+    [id, g.name, g.description || null, g.deadline || null, achievedAt]
   );
 
   return NextResponse.json({ ok: true });

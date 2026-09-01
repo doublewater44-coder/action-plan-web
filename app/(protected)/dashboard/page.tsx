@@ -14,7 +14,7 @@ type Goal = { id: number; name: string; description?: string; deadline?: string 
 type Action = { id: number; goal_id: number; name: string; target_count: number; unit: string; period: string; deadline?: string; goal_name: string };
 type Totals = { totals: Record<number, number>; weekTotals: Record<number, number>; today: Record<number, { count: number; note: string }>; chart: Array<{ action_id: number; progress_date: string; count: number; note: string }> };
 type Reflection = { id: number; goal_id: number; week_start: string; good_points: string; bad_points: string; next_goal: string; score: number };
-type Achievement = { id: number; name: string; description?: string; deadline?: string; achieved_at: string };
+type Achievement = { id: number; goal_id: number; name: string; description?: string; deadline?: string; achieved_at: string };
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'progress', label: '📊 進捗状況' },
@@ -80,8 +80,12 @@ export default function DashboardPage() {
     if (goToWeekly) setActiveTab('weekly');
   }
 
-  async function handleAchieve(goalId: number) {
-    await fetch(`/api/goals/${goalId}/achieve`, { method: 'POST' });
+  async function handleAchieve(goalId: number, achievedAt: string) {
+    await fetch(`/api/goals/${goalId}/achieve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ achievedAt }),
+    });
     fetchAll();
   }
 

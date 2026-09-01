@@ -16,16 +16,37 @@ export async function GET(req: NextRequest) {
   const weekStart = monday.toISOString().split('T')[0];
 
   try {
+    // Schema setup & one-time migration
     await query(`ALTER TABLE goals ADD COLUMN IF NOT EXISTS achieved_at DATE`);
+    await query(`
+      CREATE TABLE IF NOT EXISTS goal_achievements (
+        id SERIAL PRIMARY KEY,
+        goal_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        deadline DATE,
+        achieved_at DATE NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    // Migrate old achieved goals from goals.achieved_at → goal_achievements
+    await query(
+      `INSERT INTO goal_achievements (goal_id, name, description, deadline, achieved_at)
+       SELECT id, name, description, deadline, achieved_at
+       FROM goals
+       WHERE user_id=$1 AND achieved_at IS NOT NULL
+       AND id NOT IN (SELECT DISTINCT goal_id FROM goal_achievements)`,
+      [userId]
+    );
+    // Reset goals to always-active (clear achieved_at)
+    await query(
+      `UPDATE goals SET achieved_at=NULL WHERE user_id=$1 AND achieved_at IS NOT NULL`,
+      [userId]
+    );
 
-    // グループ1: 基本データ
-    const [goals, achievements, actions, setting] = await Promise.all([
+    const [goals, actions, setting] = await Promise.all([
       query(
-        'SELECT id, name, description, deadline FROM goals WHERE user_id=$1 AND achieved_at IS NULL ORDER BY created_at ASC',
-        [userId]
-      ),
-      query(
-        'SELECT id, name, description, deadline, achieved_at FROM goals WHERE user_id=$1 AND achieved_at IS NOT NULL ORDER BY achieved_at DESC',
+        'SELECT id, name, description, deadline FROM goals WHERE user_id=$1 ORDER BY created_at ASC',
         [userId]
       ),
       query(
@@ -40,8 +61,7 @@ export async function GET(req: NextRequest) {
       ),
     ]);
 
-    // グループ2: 進捗・振り返りデータ
-    const [totals, weekTotals, chartRows, todayRows, reflections] = await Promise.all([
+    const [totals, weekTotals, chartRows, todayRows, reflections, achievements] = await Promise.all([
       query<{ action_id: number; total: string }>(
         `SELECT dp.action_id, COALESCE(SUM(dp.count),0) AS total
          FROM daily_progress dp JOIN actions a ON dp.action_id=a.id JOIN goals g ON a.goal_id=g.id
@@ -70,6 +90,12 @@ export async function GET(req: NextRequest) {
         `SELECT wr.* FROM weekly_reflections wr
          JOIN goals g ON wr.goal_id=g.id
          WHERE g.user_id=$1 ORDER BY wr.week_start DESC`,
+        [userId]
+      ),
+      query<{ id: number; goal_id: number; name: string; description: string; deadline: string; achieved_at: string }>(
+        `SELECT ga.id, ga.goal_id, ga.name, ga.description, ga.deadline, ga.achieved_at
+         FROM goal_achievements ga JOIN goals g ON ga.goal_id=g.id
+         WHERE g.user_id=$1 ORDER BY ga.achieved_at DESC`,
         [userId]
       ),
     ]);

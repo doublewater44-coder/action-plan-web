@@ -9,7 +9,7 @@ type Action = { id: number; goal_id: number; name: string; target_count: number;
 type Totals = { totals: Record<number, number>; weekTotals: Record<number, number>; today: Record<number, { count: number; note: string }> };
 type ChartRow = { action_id: number; progress_date: string; count: number; note: string };
 type Reflection = { id: number; goal_id: number; week_start: string; good_points: string; bad_points: string; next_goal: string; score: number };
-type Achievement = { id: number; name: string; description?: string; deadline?: string; achieved_at: string };
+type Achievement = { id: number; goal_id: number; name: string; description?: string; deadline?: string; achieved_at: string };
 
 interface Props {
   goals: Goal[];
@@ -21,7 +21,7 @@ interface Props {
   achievements: Achievement[];
   onRefresh: () => void;
   onSaved: (quote: { text: string; author: string }) => void;
-  onAchieve: (goalId: number) => void;
+  onAchieve: (goalId: number, achievedAt: string) => Promise<void>;
 }
 
 function daysLabel(deadline?: string) {
@@ -63,6 +63,7 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
   const [openHistory, setOpenHistory] = useState(false);
   const [openReflIds, setOpenReflIds] = useState<Set<number>>(new Set());
   const [achieveConfirmId, setAchieveConfirmId] = useState<number | null>(null);
+  const [achieveDate, setAchieveDate] = useState(() => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' }));
   const [openAchievements, setOpenAchievements] = useState(false);
 
   // ゴール追加フォーム
@@ -77,6 +78,7 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
 
   const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
   const goalMap = Object.fromEntries(goals.map((g) => [g.id, g]));
+  const achievedGoalIds = new Set(achievements.map((a) => a.goal_id));
 
   async function saveQualitative() {
     await fetch('/api/settings', {
@@ -114,6 +116,7 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
       body: JSON.stringify({ name: editGoalName, description: editGoalDesc, deadline: editGoalDl || null }),
     });
     setEditGoalId(null);
+    setManageGoals(false);
     onRefresh();
   }
 
@@ -163,7 +166,7 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
         </div>
       )}
 
-      {/* 定量ゴール管理 */}
+      {/* 定量ゴール管理パネル */}
       {manageGoals && (
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
@@ -292,22 +295,64 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
         actions.forEach((a) => { (actionsByGoal[a.goal_id] ??= []).push(a); });
         return Object.entries(actionsByGoal).map(([gid, gActions]) => {
           const goal = goalMap[Number(gid)];
+          const isConfirming = achieveConfirmId === Number(gid);
           return (
             <div key={gid}>
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-green-500 rounded-r-lg px-3 py-2 mb-2 flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-xs text-green-700 font-bold">定量ゴール</p>
-                  <p className="text-sm font-bold text-green-800 truncate">🎯 {goal?.name ?? '不明'}{goal && daysLabel(goal.deadline)}</p>
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-green-500 rounded-r-lg px-3 py-2 mb-2">
+                {/* ゴール名行 */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs text-green-700 font-bold">定量ゴール</p>
+                    <p className="text-sm font-bold text-green-800 truncate">🎯 {goal?.name ?? '不明'}{goal && daysLabel(goal.deadline)}</p>
+                  </div>
+                  <div className="shrink-0 flex gap-1 items-center">
+                    {!isConfirming && (
+                      <>
+                        {achievedGoalIds.has(Number(gid)) && (
+                          <button
+                            onClick={() => {
+                              setManageGoals(true);
+                              setEditGoalId(Number(gid));
+                              setEditGoalName(goal?.name ?? '');
+                              setEditGoalDesc(goal?.description ?? '');
+                              setEditGoalDl(goal?.deadline ?? '');
+                            }}
+                            className="text-xs text-green-700 border border-green-400 rounded-lg px-2 py-1 hover:bg-green-100 whitespace-nowrap"
+                          >
+                            次の目標を立てる
+                          </button>
+                        )}
+                        <button
+                          onClick={() => { setAchieveConfirmId(Number(gid)); setAchieveDate(today); }}
+                          className="text-xs text-amber-600 border border-amber-300 rounded-lg px-2 py-1 hover:bg-amber-50 whitespace-nowrap"
+                        >
+                          🏆 達成
+                        </button>
+                      </>
+                    )}
+                    {isConfirming && (
+                      <button onClick={() => setAchieveConfirmId(null)} className="text-xs border border-gray-300 px-2 py-1 rounded-lg hover:bg-gray-50">×</button>
+                    )}
+                  </div>
                 </div>
-                <div className="shrink-0">
-                  {achieveConfirmId === Number(gid) ? (
-                    <div className="flex flex-col gap-1 items-end">
-                      <div className="flex gap-1">
-                        <button onClick={() => { onAchieve(Number(gid)); setAchieveConfirmId(null); }} className="text-xs bg-amber-500 text-white px-2 py-1 rounded-lg hover:bg-amber-600">✓ 達成のみ</button>
-                        <button onClick={() => setAchieveConfirmId(null)} className="text-xs border border-gray-300 px-2 py-1 rounded-lg hover:bg-gray-50">×</button>
-                      </div>
+
+                {/* 達成確認UI（展開） */}
+                {isConfirming && (
+                  <div className="mt-2 pt-2 border-t border-green-200 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-green-700 font-medium">達成日:</span>
+                      <input
+                        type="date"
+                        value={achieveDate}
+                        onChange={(e) => setAchieveDate(e.target.value)}
+                        className="text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-green-400"
+                      />
+                    </div>
+                    <p className="text-xs font-semibold text-green-800">次のゴールを設定しますか？</p>
+                    <div className="flex gap-2 flex-wrap">
                       <button
-                        onClick={() => {
+                        onClick={async () => {
+                          await onAchieve(Number(gid), achieveDate);
                           setAchieveConfirmId(null);
                           setManageGoals(true);
                           setEditGoalId(Number(gid));
@@ -315,16 +360,24 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
                           setEditGoalDesc(goal?.description ?? '');
                           setEditGoalDl(goal?.deadline ?? '');
                         }}
-                        className="text-xs bg-green-600 text-white px-2 py-1 rounded-lg hover:bg-green-700 whitespace-nowrap"
+                        className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 whitespace-nowrap"
                       >
-                        ＋ 次の目標を立てる
+                        はい、今すぐ設定
+                      </button>
+                      <button
+                        onClick={async () => {
+                          await onAchieve(Number(gid), achieveDate);
+                          setAchieveConfirmId(null);
+                        }}
+                        className="text-xs bg-amber-500 text-white px-3 py-1.5 rounded-lg hover:bg-amber-600 whitespace-nowrap"
+                      >
+                        後で設定する
                       </button>
                     </div>
-                  ) : (
-                    <button onClick={() => setAchieveConfirmId(Number(gid))} className="text-xs text-amber-600 border border-amber-300 rounded-lg px-2 py-1 hover:bg-amber-50">🏆 達成</button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
+
               {gActions.map((a) => {
                 const total = totals.totals[a.id] ?? 0;
                 const target = Number(a.target_count);
@@ -455,6 +508,7 @@ export default function TabProgress({ goals, actions, totals, chart, reflections
           </div>
         )}
       </div>
+
       {/* 達成したゴール */}
       {achievements.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
