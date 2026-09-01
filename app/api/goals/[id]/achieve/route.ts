@@ -16,11 +16,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       goal_id INTEGER NOT NULL,
       name TEXT NOT NULL,
       description TEXT,
-      deadline DATE,
+      deadline TEXT,
       achieved_at DATE NOT NULL,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  await query(`ALTER TABLE goal_achievements ALTER COLUMN deadline TYPE TEXT USING deadline::text`);
 
   const rows = await query<{ name: string; description: string; deadline: string }>(
     'SELECT name, description, deadline FROM goals WHERE id=$1 AND user_id=$2',

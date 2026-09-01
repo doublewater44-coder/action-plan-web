@@ -24,11 +24,12 @@ export async function GET(req: NextRequest) {
         goal_id INTEGER NOT NULL,
         name TEXT NOT NULL,
         description TEXT,
-        deadline DATE,
+        deadline TEXT,
         achieved_at DATE NOT NULL,
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    await query(`ALTER TABLE goal_achievements ALTER COLUMN deadline TYPE TEXT USING deadline::text`);
     // Migrate old achieved goals from goals.achieved_at → goal_achievements
     await query(
       `INSERT INTO goal_achievements (goal_id, name, description, deadline, achieved_at)
